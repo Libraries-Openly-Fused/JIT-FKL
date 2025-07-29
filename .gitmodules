@@ -1,3 +1,3 @@
-[submodule "fkl"]
-	path = fkl
+[submodule "FKL"]
+	path = FKL
 	url = https://github.com/morousg/FusedKernelLibrary.git
