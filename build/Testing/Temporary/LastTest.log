@@ -1,0 +1,29 @@
+Start testing: Jul 30 18:40 UTC
+----------------------------------------------------------
+1/1 Testing: basic_clang_interpreter_test_cpp
+1/1 Test: basic_clang_interpreter_test_cpp
+Command: "/home/runner/work/JIT-FKL/JIT-FKL/build/bin/basic_clang_interpreter_test_cpp"
+Directory: /home/runner/work/JIT-FKL/JIT-FKL/build/test
+"basic_clang_interpreter_test_cpp" start time: Jul 30 18:40 UTC
+Output:
+----------------------------------------------------------
+C++ source code string: int test() { return 23; }
+Creating compiler instance...
+Compiler instance created successfully
+Clang interpreter created successfully
+Compiling: extern "C" int test() { return 23; }
+Function compiled successfully
+Symbol 'test' found successfully
+Executed JIT compiled function from C++ string
+SUCCESS: Function returned expected value 23
+Successfully demonstrated runtime compilation of C++ code: int test() { return 23; }
+Test PASSED
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"basic_clang_interpreter_test_cpp" end time: Jul 30 18:40 UTC
+"basic_clang_interpreter_test_cpp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Jul 30 18:40 UTC
