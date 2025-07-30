@@ -1,2 +1,0 @@
-basic_clang_interpreter_test_cpp 1 0.0298845
----
