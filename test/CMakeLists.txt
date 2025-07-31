@@ -84,6 +84,7 @@ function(add_generated_test TARGET_NAME TEST_SOURCE EXTENSION)
     # Handle NVRTC dependencies (mandatory)
     target_link_libraries(${TARGET_NAME_EXT} PRIVATE ${NVRTC_LIBRARIES})
     target_compile_definitions(${TARGET_NAME_EXT} PRIVATE NVRTC_ENABLED)
+    target_compile_definitions(${TARGET_NAME_EXT} PRIVATE FKL_INCLUDE_PATH="${CMAKE_SOURCE_DIR}/fkl/include")
     target_link_libraries(${TARGET_NAME_EXT} PRIVATE CUDA::cuda_driver CUDA::cudart)
     
     if(MSVC AND NVRTC_STATIC_LINK)

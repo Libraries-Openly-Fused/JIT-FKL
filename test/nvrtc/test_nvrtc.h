@@ -38,33 +38,12 @@
 }
 
 int launch() {
-    // --- 1. Complete Kernel Source Content ---
+    // --- 1. Include the correct FKL kernel header using NVRTC ---
     const char* main_source_content =
         R"( 
-        #include <fused_kernel/core/execution_model/executors.h>
+        #include <fused_kernel/core/execution_model/executor_details/executor_kernels.h>
         #include <fused_kernel/algorithms/basic_ops/arithmetic.h>
-        
-        // Generic kernel template that can handle operation pipelines
-        template<typename... Ops>
-        __global__ void genericKernel(Ops... ops) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            
-            // Execute the operation pipeline
-            // This is a simplified version - the actual implementation would 
-            // need to properly chain the operations together
-            auto result = ops...;  // Placeholder for operation chaining
-        }
-        
-        // Simple kernel for the specific test case (read, multiply, add, write)
-        __global__ void test_pipeline_kernel(float* input, float* output, float mul_factor, float add_offset, int size) {
-            int idx = blockIdx.x * blockDim.x + threadIdx.x;
-            if (idx < size) {
-                float value = input[idx];           // Read operation
-                value = value * mul_factor;         // Multiply operation  
-                value = value + add_offset;         // Add operation
-                output[idx] = value;                // Write operation
-            }
-        }
+        #include <fused_kernel/core/execution_model/data_parallel_patterns.h>
     )";
 
     // --- 2. Define the Runtime Pipeline using JIT_Operation_pp ---
@@ -88,9 +67,9 @@ int launch() {
         write_op // Write operation
     );
 
-    // --- 3. Use the specific test kernel name ---
-    const char* name_expression = "test_pipeline_kernel";
-    std::cout << "Using kernel name: " << name_expression << std::endl;
+    // --- 3. Use buildNameExpression to build the correct kernel name ---
+    std::string name_expression = buildNameExpression(pipeline);
+    std::cout << "Using kernel name expression: " << name_expression << std::endl;
 
     // --- 4. CUDA Init & NVRTC Setup ---
     gpuErrchk(cuInit(0));
@@ -100,12 +79,14 @@ int launch() {
     gpuErrchk(cuCtxCreate(&context, 0, device));
 
     nvrtcProgram prog;
-    NVRTC_CHECK(nvrtcCreateProgram(&prog, main_source_content, "pipeline.cu", 2, nullptr, nullptr));
+    NVRTC_CHECK(nvrtcCreateProgram(&prog, main_source_content, "pipeline.cu", 0, nullptr, nullptr));
 
     // --- 5. Compile ---
-    NVRTC_CHECK(nvrtcAddNameExpression(prog, name_expression));
-    const char* options[] = { "--std=c++17", "-ID:/include", "-IE:/GitHub/FKL/include", "-DNVRTC_COMPILER" };
-    nvrtcResult compile_result = nvrtcCompileProgram(prog, 4, options);
+    NVRTC_CHECK(nvrtcAddNameExpression(prog, name_expression.c_str()));
+    // Use FKL include path from CMake
+    std::string fkl_include_option = std::string("-I") + FKL_INCLUDE_PATH;
+    const char* options[] = { "--std=c++17", fkl_include_option.c_str(), "-DNVRTC_COMPILER" };
+    nvrtcResult compile_result = nvrtcCompileProgram(prog, 3, options);
     size_t log_size;
     NVRTC_CHECK(nvrtcGetProgramLogSize(prog, &log_size));
     if (log_size > 1) {
@@ -117,7 +98,7 @@ int launch() {
 
     // --- 6. Get PTX, Mangled Name, and Kernel Handle ---
     const char* mangled_name;
-    NVRTC_CHECK(nvrtcGetLoweredName(prog, name_expression, &mangled_name));
+    NVRTC_CHECK(nvrtcGetLoweredName(prog, name_expression.c_str(), &mangled_name));
     std::cout << "Name expression: " << name_expression << std::endl;
     std::cout << "Mangled kernel name: " << mangled_name << std::endl;
     size_t ptx_size;
@@ -132,22 +113,10 @@ int launch() {
     // --- 7. Prepare Data and Launch ---
     const int N = 256;
     
-    // Get raw device pointers from FKL Ptr1D objects
-    float* d_input_ptr = d_data_in.getPtr();
-    float* d_output_ptr = d_data_out.getPtr();
-    float mul_factor = 2.0f;
-    float add_offset = 5.0f;
-    
-    // Build kernel arguments for the simple test kernel
-    std::vector<void*> kernel_args_vec = {
-        &d_input_ptr,    // input array pointer
-        &d_output_ptr,   // output array pointer  
-        &mul_factor,     // multiply factor
-        &add_offset,     // add offset
-        &N               // array size
-    };
+    // Use buildKernelArgumentsFKL to build kernel arguments from the pipeline
+    std::vector<void*> kernel_args_vec = buildKernelArgumentsFKL(pipeline);
 
-    std::cout << "Launching test pipeline kernel..." << std::endl;
+    std::cout << "Launching launchTransformDPP_Kernel..." << std::endl;
     gpuErrchk(cuLaunchKernel(kernel_func, (N + 255) / 256, 1, 1, 256, 1, 1, 0, reinterpret_cast<CUstream>(stream.getCUDAStream()), kernel_args_vec.data(), nullptr));
 
     // --- 8. Verify & Cleanup ---
