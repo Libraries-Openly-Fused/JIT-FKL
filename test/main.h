@@ -1,6 +1,5 @@
-﻿/* Copyright 2025 Oscar Amoros Huguet
-   Copyright 2025 Grup Mediapro S.L.U (Oscar Amoros Huguet)
-   Copyright 2025 Albert Andaluz Gonzalez
+/* Copyright 2023 Oscar Amoros Huguet
+   Copyright 2023 Albert Andaluz Gonzalez
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -14,9 +13,6 @@
    See the License for the specific language governing permissions and
    limitations under the License. */
 
- 
-#include "@TEST_SOURCE@"
+#pragma once
 
-int launcher() {
-    return launch();
-}
+int launch();

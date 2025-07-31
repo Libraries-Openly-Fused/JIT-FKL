@@ -1,4 +1,6 @@
-/* Copyright 2025 Grup Mediapro S.L.U (Oscar Amoros Huguet)
+﻿/* Copyright 2025 Oscar Amoros Huguet
+   Copyright 2025 Grup Mediapro S.L.U (Oscar Amoros Huguet)
+   Copyright 2025 Albert Andaluz Gonzalez
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -12,24 +14,9 @@
    See the License for the specific language governing permissions and
    limitations under the License. */
 
-#include <iostream>
-
-extern int launcher();
-
+ 
+#include <tests/main.h>
 int main(int argc, char **argv) {
-    try {
-        int result = launcher();
-        if (result == 0) {
-            std::cout << "Test PASSED" << std::endl;
-        } else {
-            std::cout << "Test FAILED with code: " << result << std::endl;
-        }
-        return result;
-    } catch (const std::exception& e) {
-        std::cerr << "Test FAILED with exception: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Test FAILED with unknown exception" << std::endl;
-        return 1;
-    }
+ return launch();
 }
+
