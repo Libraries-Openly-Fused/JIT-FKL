@@ -29,9 +29,29 @@ cd ../build
 cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Release
 ```
 
+#### Custom CUDA Architecture Configuration
+By default, the build system uses "native" CUDA architecture detection, which automatically detects the GPU on the build machine. You can override this:
+
+```bash
+# Use native detection (default - detects GPU at compile time)
+cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Release
+
+# Specify custom architectures for broader compatibility
+cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCHITECTURES_OVERRIDE="60;70;75;80;86"
+
+# Target only modern GPUs
+cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Release -DCUDA_ARCHITECTURES_OVERRIDE="80;86"
+```
+
+This option works on both Windows and Linux systems.
+
 #### CMake Options
 - `BUILD_TESTS=ON/OFF` - Enable/disable test building (default: ON)
 - `NVRTC_STATIC_LINK=ON/OFF` - Use static/dynamic NVRTC linking (default: ON)
+- `CUDA_ARCHITECTURES_OVERRIDE=<architectures>` - Override CUDA architectures (default: "native")
+  - Use "native" for automatic GPU detection at compile time
+  - Or specify custom architectures like "60;70;80" for specific compute capabilities
+  - This option is available in cmake-gui for easy configuration
 
 ### 3. Build the Tests
 ```bash

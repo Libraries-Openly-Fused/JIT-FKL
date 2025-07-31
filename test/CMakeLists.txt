@@ -1,3 +1,16 @@
+# CUDA architecture configuration option
+# Default to "native" which auto-detects the GPU architecture at compile time  
+set(CUDA_ARCHITECTURES_OVERRIDE "native" CACHE STRING "CUDA architectures to target (use 'native' for auto-detection, or specify like '60;70;80')")
+set(CUDA_ARCH_TO_USE "${CUDA_ARCHITECTURES_OVERRIDE}")
+
+# Display the CUDA architecture configuration
+message(STATUS "CUDA Architecture Configuration: ${CUDA_ARCH_TO_USE}")
+if(CUDA_ARCH_TO_USE STREQUAL "native")
+    message(STATUS "  Using native CUDA architecture detection (auto-detects GPU at compile time)")
+else()
+    message(STATUS "  Using custom CUDA architectures: ${CUDA_ARCH_TO_USE}")
+endif()
+
 # Test discovery and generation macros
 MACRO(SUBDIRLIST result curdir)
     FILE(GLOB children RELATIVE ${curdir} ${curdir}/*)
@@ -12,9 +25,25 @@ ENDMACRO()
 
 # Function to add CUDA support to a test target
 function(add_cuda_to_test TARGET_NAME)
-    set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_ARCHITECTURES 60 70 75 80 86)
+    set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_ARCHITECTURES ${CUDA_ARCH_TO_USE})
     set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-    target_compile_definitions(${TARGET_NAME} PRIVATE __CUDA_ARCH_LIST__=600)
+    
+    # Set compile definition based on architecture (600 for compatibility, or native detection)
+    if(CUDA_ARCH_TO_USE STREQUAL "native")
+        target_compile_definitions(${TARGET_NAME} PRIVATE __CUDA_ARCH_LIST__=0)  # Let CUDA runtime detect
+        message(STATUS "Target ${TARGET_NAME}: Using native CUDA architecture detection")
+    else()
+        # Extract first architecture and format for compile definition
+        string(REPLACE ";" " " ARCH_LIST_STR "${CUDA_ARCH_TO_USE}")
+        string(REGEX MATCH "[0-9]+" FIRST_ARCH "${ARCH_LIST_STR}")
+        if(FIRST_ARCH)
+            target_compile_definitions(${TARGET_NAME} PRIVATE __CUDA_ARCH_LIST__=${FIRST_ARCH}0)
+            message(STATUS "Target ${TARGET_NAME}: Using CUDA architectures ${CUDA_ARCH_TO_USE}")
+        else()
+            target_compile_definitions(${TARGET_NAME} PRIVATE __CUDA_ARCH_LIST__=600)
+            message(STATUS "Target ${TARGET_NAME}: Using default CUDA architecture (compute_60)")
+        endif()
+    endif()
 endfunction()
 
 # Function to create a test executable from a header file
