@@ -54,6 +54,9 @@ function(add_generated_test TARGET_NAME TEST_SOURCE EXTENSION)
     get_filename_component(TEST_OUTPUT_DIR ${TEST_GENERATED_SOURCE} DIRECTORY)
     file(MAKE_DIRECTORY ${TEST_OUTPUT_DIR})
     
+    # Set TEST_SOURCE variable for template substitution
+    set(TEST_SOURCE "${TEST_SOURCE}")
+    
     # Configure the launcher file
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/launcher.in ${TEST_GENERATED_SOURCE} @ONLY)
     
@@ -132,13 +135,22 @@ endfunction()
 
 # Discover and add tests
 function(discover_tests)
+    # Only look for test files in specific subdirectories (clang/, nvrtc/)
     file(GLOB_RECURSE TEST_SOURCES
         CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
+        "${CMAKE_CURRENT_SOURCE_DIR}/clang/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/nvrtc/*.h")
     
     foreach(test_source ${TEST_SOURCES})
         get_filename_component(TARGET_NAME ${test_source} NAME_WE)
         file(READ ${test_source} TEST_SOURCE_CONTENTS)
+        
+        # Only process files that contain a launch() function implementation
+        string(FIND "${TEST_SOURCE_CONTENTS}" "int launch()" POS_LAUNCH_FUNC)
+        if(${POS_LAUNCH_FUNC} EQUAL -1)
+            message(STATUS "Skipping ${test_source} - no launch() function found")
+            continue()
+        endif()
         
         # Check for special markers in the test files
         string(FIND "${TEST_SOURCE_CONTENTS}" "__ONLY_CU__" POS_ONLY_CU)
