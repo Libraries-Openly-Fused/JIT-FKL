@@ -16,105 +16,88 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Build options
 option(BUILD_TESTS "Build unit tests" ON)
-option(NVRTC_ENABLE "Enable NVRTC for runtime compilation" ON)
 option(NVRTC_STATIC_LINK "Enable static linking for NVRTC" ON)
 
-# Find CUDA (optional but recommended)
+# Find CUDA (mandatory)
 include(CheckLanguage)
 check_language(CUDA)
 if(CMAKE_CUDA_COMPILER)
-    option(ENABLE_CUDA "Enable CUDA support" ON)
-    if(ENABLE_CUDA)
-        enable_language(CUDA)
-        find_package(CUDAToolkit REQUIRED)
-        message(STATUS "CUDA support enabled")
-    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    message(STATUS "CUDA support enabled")
 else()
-    message(STATUS "CUDA compiler not found, CUDA support will be disabled.")
-    set(ENABLE_CUDA OFF)
+    message(FATAL_ERROR "CUDA compiler not found. CUDA is mandatory for this project. Please install CUDA Toolkit.")
 endif()
 
-# LLVM/Clang JIT compilation support (separate from NVRTC)
+# LLVM/Clang JIT compilation support (mandatory)
 message(STATUS "Configuring LLVM/Clang JIT compilation support...")
 find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config-18 llvm-config DOC "llvm-config tool")
 
-if(LLVM_CONFIG_EXECUTABLE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --version OUTPUT_VARIABLE LLVM_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --prefix OUTPUT_VARIABLE LLVM_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir OUTPUT_VARIABLE LLVM_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libdir OUTPUT_VARIABLE LLVM_LIB_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --cxxflags OUTPUT_VARIABLE LLVM_CXX_FLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --ldflags OUTPUT_VARIABLE LLVM_LD_FLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs all OUTPUT_VARIABLE LLVM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --system-libs OUTPUT_VARIABLE LLVM_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-    
-    # Find Clang C++ library for interpreter support
-    find_library(CLANG_CPP_LIB 
-        NAMES clang-cpp.18.1 clang-cpp.18 clang-cpp
-        PATHS ${LLVM_LIB_DIR} /usr/lib/x86_64-linux-gnu /usr/lib
-        NO_DEFAULT_PATH)
-    if(CLANG_CPP_LIB)
-        set(CLANG_LIBRARIES ${CLANG_CPP_LIB})
-        message(STATUS "Found Clang C++ library: ${CLANG_CPP_LIB}")
-    else()
-        # Try direct path to the library
-        if(EXISTS "/usr/lib/x86_64-linux-gnu/libclang-cpp.so.18.1")
-            set(CLANG_LIBRARIES "/usr/lib/x86_64-linux-gnu/libclang-cpp.so.18.1")
-            message(STATUS "Using direct path to Clang C++ library: ${CLANG_LIBRARIES}")
-        else()
-            message(WARNING "libclang-cpp not found, trying individual Clang libraries")
-            set(CLANG_LIBRARIES -lclangInterpreter -lclangFrontend -lclangCodeGen -lclangSema -lclangAnalysis -lclangAST -lclangParse -lclangLex -lclangBasic)
-        endif()
-    endif()
-    
-    # Add Clang include directory for interpreter headers
-    set(CLANG_INCLUDE_DIR "${LLVM_PREFIX}/include")
-    if(NOT EXISTS "${CLANG_INCLUDE_DIR}/clang/Interpreter/Interpreter.h")
-        # Try alternative location for Clang headers
-        set(CLANG_INCLUDE_DIR "/usr/lib/llvm-18/include")
-    endif()
-    
-    # Verify that the Clang interpreter header exists
-    if(EXISTS "${CLANG_INCLUDE_DIR}/clang/Interpreter/Interpreter.h")
-        message(STATUS "LLVM/Clang JIT compilation support is enabled.")
-        message(STATUS "LLVM version: ${LLVM_VERSION}")
-        message(STATUS "LLVM include dir: ${LLVM_INCLUDE_DIR}")
-        message(STATUS "Clang include dir: ${CLANG_INCLUDE_DIR}")
-        
-        set(LLVM_JIT_LIBRARIES ${LLVM_LD_FLAGS} ${LLVM_LIBS} ${CLANG_LIBRARIES} ${LLVM_SYSTEM_LIBS})
-        set(LLVM_JIT_INCLUDE_DIRS ${LLVM_INCLUDE_DIR} ${CLANG_INCLUDE_DIR})
-        set(LLVM_JIT_CXX_FLAGS ${LLVM_CXX_FLAGS})
-        set(LLVM_JIT_ENABLED TRUE)
-    else()
-        message(WARNING "Clang interpreter headers not found at ${CLANG_INCLUDE_DIR}")
-        set(LLVM_JIT_ENABLED FALSE)
-    endif()
-else()
-    message(WARNING "llvm-config not found. JIT compilation will be disabled.")
-    set(LLVM_JIT_ENABLED FALSE)
+if(NOT LLVM_CONFIG_EXECUTABLE)
+    message(FATAL_ERROR "llvm-config not found. LLVM/Clang JIT compilation is mandatory for this project. Please install LLVM/Clang 18.")
 endif()
 
-# Setup NVRTC support
-if(NVRTC_ENABLE)
-    if(CUDAToolkit_FOUND)
-        message(STATUS "NVRTC support is enabled.")
-        if(NVRTC_STATIC_LINK)
-            message(STATUS "Configuring for STATIC NVRTC linkage.")
-            set(NVRTC_LIBRARIES CUDA::nvrtc_static)
-        else()
-            message(STATUS "Configuring for DYNAMIC NVRTC linkage.")
-            set(NVRTC_LIBRARIES CUDA::nvrtc)
-        endif()
-        
-        # Use the already configured LLVM JIT if available
-        if(LLVM_JIT_ENABLED)
-            set(NVRTC_JIT_ENABLED TRUE)
-        else()
-            set(NVRTC_JIT_ENABLED FALSE)
-        endif()
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --version OUTPUT_VARIABLE LLVM_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --prefix OUTPUT_VARIABLE LLVM_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir OUTPUT_VARIABLE LLVM_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libdir OUTPUT_VARIABLE LLVM_LIB_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --cxxflags OUTPUT_VARIABLE LLVM_CXX_FLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --ldflags OUTPUT_VARIABLE LLVM_LD_FLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs all OUTPUT_VARIABLE LLVM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --system-libs OUTPUT_VARIABLE LLVM_SYSTEM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# Find Clang C++ library for interpreter support
+find_library(CLANG_CPP_LIB 
+    NAMES clang-cpp.18.1 clang-cpp.18 clang-cpp
+    PATHS ${LLVM_LIB_DIR} /usr/lib/x86_64-linux-gnu /usr/lib
+    NO_DEFAULT_PATH)
+if(CLANG_CPP_LIB)
+    set(CLANG_LIBRARIES ${CLANG_CPP_LIB})
+    message(STATUS "Found Clang C++ library: ${CLANG_CPP_LIB}")
+else()
+    # Try direct path to the library
+    if(EXISTS "/usr/lib/x86_64-linux-gnu/libclang-cpp.so.18.1")
+        set(CLANG_LIBRARIES "/usr/lib/x86_64-linux-gnu/libclang-cpp.so.18.1")
+        message(STATUS "Using direct path to Clang C++ library: ${CLANG_LIBRARIES}")
     else()
-        set(NVRTC_ENABLE OFF CACHE BOOL "NVRTC support was disabled because the CUDA Toolkit could not be found." FORCE)
+        message(WARNING "libclang-cpp not found, trying individual Clang libraries")
+        set(CLANG_LIBRARIES -lclangInterpreter -lclangFrontend -lclangCodeGen -lclangSema -lclangAnalysis -lclangAST -lclangParse -lclangLex -lclangBasic)
     endif()
+endif()
+
+# Add Clang include directory for interpreter headers
+set(CLANG_INCLUDE_DIR "${LLVM_PREFIX}/include")
+if(NOT EXISTS "${CLANG_INCLUDE_DIR}/clang/Interpreter/Interpreter.h")
+    # Try alternative location for Clang headers
+    set(CLANG_INCLUDE_DIR "/usr/lib/llvm-18/include")
+endif()
+
+# Verify that the Clang interpreter header exists (mandatory)
+if(NOT EXISTS "${CLANG_INCLUDE_DIR}/clang/Interpreter/Interpreter.h")
+    message(FATAL_ERROR "Clang interpreter headers not found. Please install LLVM/Clang 18 development headers.")
+endif()
+
+message(STATUS "LLVM/Clang JIT compilation support is enabled.")
+message(STATUS "LLVM version: ${LLVM_VERSION}")
+message(STATUS "LLVM include dir: ${LLVM_INCLUDE_DIR}")
+message(STATUS "Clang include dir: ${CLANG_INCLUDE_DIR}")
+
+set(LLVM_JIT_LIBRARIES ${LLVM_LD_FLAGS} ${LLVM_LIBS} ${CLANG_LIBRARIES} ${LLVM_SYSTEM_LIBS})
+set(LLVM_JIT_INCLUDE_DIRS ${LLVM_INCLUDE_DIR} ${CLANG_INCLUDE_DIR})
+set(LLVM_JIT_CXX_FLAGS ${LLVM_CXX_FLAGS})
+
+# Setup NVRTC support (mandatory)
+if(NOT CUDAToolkit_FOUND)
+    message(FATAL_ERROR "CUDA Toolkit not found. NVRTC support is mandatory for this project.")
+endif()
+
+message(STATUS "NVRTC support is enabled.")
+if(NVRTC_STATIC_LINK)
+    message(STATUS "Configuring for STATIC NVRTC linkage.")
+    set(NVRTC_LIBRARIES CUDA::nvrtc_static)
+else()
+    message(STATUS "Configuring for DYNAMIC NVRTC linkage.")
+    set(NVRTC_LIBRARIES CUDA::nvrtc)
 endif()
 
 # Find FKL library (from submodule)

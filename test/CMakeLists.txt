@@ -12,11 +12,9 @@ ENDMACRO()
 
 # Function to add CUDA support to a test target
 function(add_cuda_to_test TARGET_NAME)
-    if(ENABLE_CUDA)
-        set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_ARCHITECTURES 60 70 75 80 86)
-        set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
-        target_compile_definitions(${TARGET_NAME} PRIVATE __CUDA_ARCH_LIST__=600)
-    endif()
+    set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_ARCHITECTURES 60 70 75 80 86)
+    set_property(TARGET ${TARGET_NAME} PROPERTY CUDA_SEPARABLE_COMPILATION ON)
+    target_compile_definitions(${TARGET_NAME} PRIVATE __CUDA_ARCH_LIST__=600)
 endfunction()
 
 # Function to create a test executable from a header file
@@ -50,40 +48,42 @@ function(add_generated_test TARGET_NAME TEST_SOURCE EXTENSION)
     # Link FKL library
     target_link_libraries(${TARGET_NAME_EXT} PRIVATE FKL::FKL)
     
-    # Handle NVRTC dependencies
-    if(NVRTC_ENABLE)
-        target_link_libraries(${TARGET_NAME_EXT} PRIVATE ${NVRTC_LIBRARIES})
-        target_compile_definitions(${TARGET_NAME_EXT} PRIVATE NVRTC_ENABLED)
-        target_link_libraries(${TARGET_NAME_EXT} PRIVATE CUDA::cuda_driver CUDA::cudart)
-        
-        if(MSVC AND NVRTC_STATIC_LINK)
-            set_target_properties(${TARGET_NAME_EXT} PROPERTIES
-                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-        endif()
-        
-        # Add LLVM JIT support if enabled
-        if(NVRTC_JIT_ENABLED)
-            target_include_directories(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_INCLUDE_DIRS})
-            target_compile_options(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_CXX_FLAGS})
-            target_link_libraries(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_LIBRARIES})
-            target_compile_definitions(${TARGET_NAME_EXT} PRIVATE LLVM_JIT_ENABLED)
-            message(STATUS "Linking LLVM JIT libraries to test: ${TARGET_NAME_EXT}")
-        endif()
+    # Handle NVRTC dependencies (mandatory)
+    target_link_libraries(${TARGET_NAME_EXT} PRIVATE ${NVRTC_LIBRARIES})
+    target_compile_definitions(${TARGET_NAME_EXT} PRIVATE NVRTC_ENABLED)
+    target_link_libraries(${TARGET_NAME_EXT} PRIVATE CUDA::cuda_driver CUDA::cudart)
+    
+    if(MSVC AND NVRTC_STATIC_LINK)
+        set_target_properties(${TARGET_NAME_EXT} PROPERTIES
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
     
-    # Handle LLVM JIT support for Clang interpreter tests (independent of NVRTC)
+    # Add LLVM JIT support (mandatory)
+    target_include_directories(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_INCLUDE_DIRS})
+    target_compile_options(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_CXX_FLAGS})
+    target_link_libraries(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_LIBRARIES})
+    target_compile_definitions(${TARGET_NAME_EXT} PRIVATE LLVM_JIT_ENABLED)
+    message(STATUS "Linking LLVM JIT libraries to test: ${TARGET_NAME_EXT}")
+    
+    # Handle LLVM JIT support for Clang interpreter tests (mandatory)
     file(READ ${TEST_SOURCE} TEST_CONTENT_CHECK)
     string(FIND "${TEST_CONTENT_CHECK}" "clang/Interpreter/Interpreter.h" POS_CLANG_INTERPRETER_CHECK)
-    if(POS_CLANG_INTERPRETER_CHECK GREATER_EQUAL 0 AND LLVM_JIT_ENABLED)
+    if(POS_CLANG_INTERPRETER_CHECK GREATER_EQUAL 0)
         target_include_directories(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_INCLUDE_DIRS})
         target_compile_options(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_CXX_FLAGS})
         target_link_libraries(${TARGET_NAME_EXT} PRIVATE ${LLVM_JIT_LIBRARIES})
         target_compile_definitions(${TARGET_NAME_EXT} PRIVATE LLVM_JIT_ENABLED)
         message(STATUS "Linking LLVM JIT libraries to Clang interpreter test: ${TARGET_NAME_EXT}")
+    elseif(POS_CLANG_INTERPRETER_CHECK EQUAL -1)
+        # Check if any test requires Clang interpreter but it's missing
+        string(FIND "${TEST_CONTENT_CHECK}" "clang/Interpreter" POS_CLANG_CHECK)
+        if(POS_CLANG_CHECK GREATER_EQUAL 0)
+            message(FATAL_ERROR "Test ${TARGET_NAME_EXT} requires Clang interpreter headers but they are missing. Please install LLVM/Clang 18 development headers.")
+        endif()
     endif()
     
     # Handle CUDA-specific configuration
-    if(${EXTENSION} STREQUAL "cu" AND ENABLE_CUDA)
+    if(${EXTENSION} STREQUAL "cu")
         add_cuda_to_test(${TARGET_NAME_EXT})
     endif()
     
@@ -118,19 +118,11 @@ function(discover_tests)
         
         # Add C++ version if not marked as CUDA-only
         if(${POS_ONLY_CU} EQUAL -1)
-            # Check if test needs NVRTC and if NVRTC is enabled
-            if(POS_NVRTC GREATER_EQUAL 0 AND NOT NVRTC_ENABLE)
-                message(STATUS "Skipping NVRTC test ${TARGET_NAME} because NVRTC is disabled")
-            # Check if test needs Clang interpreter and if LLVM JIT is enabled
-            elseif(POS_CLANG_INTERPRETER GREATER_EQUAL 0 AND NOT LLVM_JIT_ENABLED)
-                message(STATUS "Skipping Clang interpreter test ${TARGET_NAME} because LLVM JIT is disabled")
-            else()
-                add_generated_test("${TARGET_NAME}" "${test_source}" "cpp")
-            endif()
+            add_generated_test("${TARGET_NAME}" "${test_source}" "cpp")
         endif()
         
-        # Add CUDA version if CUDA is available and not marked as CPU-only
-        if(CMAKE_CUDA_COMPILER AND ENABLE_CUDA AND ${POS_ONLY_CPU} EQUAL -1)
+        # Add CUDA version if not marked as CPU-only
+        if(${POS_ONLY_CPU} EQUAL -1)
             add_generated_test("${TARGET_NAME}" "${test_source}" "cu")
         endif()
     endforeach()

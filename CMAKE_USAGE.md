@@ -8,13 +8,10 @@ This document explains how to use the CMake build system to compile and run the 
 - CMake 3.22 or higher
 - C++17 compatible compiler (GCC, Clang, MSVC)
 - Git (for submodule initialization)
-
-### Optional Dependencies
-- **LLVM/Clang 18** (required for `basic_clang_interpreter_test`)
+- **LLVM/Clang 18** (mandatory for JIT compilation)
   - On Ubuntu: `sudo apt install llvm-18-dev clang-18 libclang-18-dev`
   - On other systems: Install LLVM/Clang 18 from [LLVM releases](https://github.com/llvm/llvm-project/releases)
-
-- **CUDA Toolkit** (required for `test_nvrtc`)
+- **CUDA Toolkit** (mandatory for NVRTC and GPU support)
   - Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
   - Requires compatible NVIDIA GPU
 
@@ -27,16 +24,14 @@ git submodule update --init --recursive
 
 ### 2. Configure the Build
 ```bash
-mkdir build
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+mkdir ../build
+cd ../build
+cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Release
 ```
 
 #### CMake Options
 - `BUILD_TESTS=ON/OFF` - Enable/disable test building (default: ON)
-- `NVRTC_ENABLE=ON/OFF` - Enable/disable NVRTC support (default: ON when CUDA is available)
 - `NVRTC_STATIC_LINK=ON/OFF` - Use static/dynamic NVRTC linking (default: ON)
-- `ENABLE_CUDA=ON/OFF` - Enable/disable CUDA support (default: ON when CUDA compiler is found)
 
 ### 3. Build the Tests
 ```bash
@@ -65,22 +60,22 @@ The CMake system automatically discovers test header files in the `test/` direct
 - Each test must contain a `launch()` function that returns an int (0 = success)
 - Tests are automatically categorized based on content and build multiple variants:
   - `*_cpp` - C++ version (always built unless marked `__ONLY_CU__`)
-  - `*_cu` - CUDA version (built when CUDA is available unless marked `__ONLY_CPU__`)
+  - `*_cu` - CUDA version (always built unless marked `__ONLY_CPU__`)
 
 ### Test Markers
 Tests can use special markers to control compilation:
 - `__ONLY_CPU__` - Only build C++ version
 - `__ONLY_CU__` - Only build CUDA version
-- `#if defined(NVRTC_ENABLED)` - Requires NVRTC support
-- `#include "clang/Interpreter/Interpreter.h"` - Requires LLVM/Clang JIT support
+- `#if defined(NVRTC_ENABLED)` - Uses NVRTC support (always available)
+- `#include "clang/Interpreter/Interpreter.h"` - Uses LLVM/Clang JIT support (always available)
 
 ### Current Tests
 1. **basic_clang_interpreter_test** - Tests C++ JIT compilation using Clang interpreter
-   - Requires: LLVM/Clang 18
+   - Uses: LLVM/Clang 18
    - Tests: Runtime C++ code compilation and execution
 
 2. **test_nvrtc** - Tests CUDA kernel JIT compilation using NVRTC
-   - Requires: CUDA Toolkit, NVRTC, FKL library
+   - Uses: CUDA Toolkit, NVRTC, FKL library  
    - Tests: Runtime CUDA kernel compilation and execution
 
 ## File Structure
@@ -99,38 +94,40 @@ build/                      # Build directory (excluded from git)
 
 ## Dependencies Management
 
-The CMake system automatically handles:
+The CMake system requires and automatically configures:
 - FKL library compilation from submodule
-- LLVM/Clang library detection and linking
-- NVRTC library detection and linking
-- CUDA compilation flags and architecture settings
+- LLVM/Clang library detection and linking (mandatory)
+- NVRTC library detection and linking (mandatory)
+- CUDA compilation flags and architecture settings (mandatory)
 - Cross-platform compatibility (Linux, Windows, macOS)
+
+All dependencies are required - the build will fail if any are missing.
 
 ## Troubleshooting
 
 ### LLVM/Clang Issues
 ```bash
-# Check if llvm-config is available
+# Check if llvm-config is available (required)
 which llvm-config-18 || which llvm-config
 
-# Verify Clang headers
+# Verify Clang headers (required)
 ls /usr/lib/llvm-18/include/clang/Interpreter/Interpreter.h
 ```
 
 ### CUDA Issues
 ```bash
-# Check CUDA installation
+# Check CUDA installation (required)
 nvcc --version
 nvidia-smi
 
-# Verify NVRTC availability
+# Verify NVRTC availability (required)
 find /usr/local/cuda -name "*nvrtc*"
 ```
 
 ### Build Issues
 ```bash
-# Clean build
-rm -rf build
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug  # Use Debug for more verbose output
+# Clean build (build outside repository)
+rm -rf ../build
+mkdir ../build && cd ../build
+cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Debug  # Use Debug for more verbose output
 ```
