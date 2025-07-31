@@ -18,6 +18,38 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_TESTS "Build unit tests" ON)
 option(NVRTC_STATIC_LINK "Enable static linking for NVRTC" ON)
 
+# Option to automatically install missing dependencies
+option(AUTO_INSTALL_DEPENDENCIES "Automatically install missing dependencies using system package manager" OFF)
+
+# Function to install packages on Ubuntu/Debian systems
+function(install_system_packages PACKAGES)
+    if(AUTO_INSTALL_DEPENDENCIES)
+        message(STATUS "Attempting to install missing packages: ${PACKAGES}")
+        execute_process(
+            COMMAND sudo apt update
+            RESULT_VARIABLE UPDATE_RESULT
+            OUTPUT_QUIET ERROR_QUIET
+        )
+        if(UPDATE_RESULT EQUAL 0)
+            execute_process(
+                COMMAND sudo apt install -y ${PACKAGES}
+                RESULT_VARIABLE INSTALL_RESULT
+                OUTPUT_QUIET ERROR_QUIET
+            )
+            if(INSTALL_RESULT EQUAL 0)
+                message(STATUS "Successfully installed packages: ${PACKAGES}")
+            else()
+                message(WARNING "Failed to install packages: ${PACKAGES}")
+            endif()
+        else()
+            message(WARNING "Failed to update package lists")
+        endif()
+    else()
+        message(STATUS "Auto-install is disabled. To enable automatic installation, use:")
+        message(STATUS "  cmake -DAUTO_INSTALL_DEPENDENCIES=ON ...")
+    endif()
+endfunction()
+
 # Find CUDA (mandatory)
 include(CheckLanguage)
 check_language(CUDA)
@@ -26,7 +58,32 @@ if(CMAKE_CUDA_COMPILER)
     find_package(CUDAToolkit REQUIRED)
     message(STATUS "CUDA support enabled")
 else()
-    message(FATAL_ERROR "CUDA compiler not found. CUDA is mandatory for this project. Please install CUDA Toolkit.")
+    message(STATUS "CUDA compiler not found. Attempting to install CUDA Toolkit...")
+    install_system_packages("nvidia-cuda-toolkit nvidia-cuda-dev")
+    
+    # Create version.json file for FKL compatibility if needed
+    if(NOT EXISTS "/usr/lib/cuda/version.json")
+        execute_process(
+            COMMAND sudo mkdir -p /usr/lib/cuda
+            OUTPUT_QUIET ERROR_QUIET
+        )
+        file(WRITE "${CMAKE_BINARY_DIR}/version.json" 
+            "{\n  \"cuda\": {\n    \"name\": \"CUDA SDK\",\n    \"version\": \"12.0.140\"\n  },\n  \"cuda_nvcc\": {\n    \"name\": \"CUDA NVCC\",\n    \"version\": \"12.0.140\"\n  }\n}")
+        execute_process(
+            COMMAND sudo cp "${CMAKE_BINARY_DIR}/version.json" /usr/lib/cuda/version.json
+            OUTPUT_QUIET ERROR_QUIET
+        )
+    endif()
+    
+    # Retry CUDA detection after installation
+    check_language(CUDA)
+    if(CMAKE_CUDA_COMPILER)
+        enable_language(CUDA)
+        find_package(CUDAToolkit REQUIRED)
+        message(STATUS "CUDA support enabled after installation")
+    else()
+        message(FATAL_ERROR "CUDA compiler not found. CUDA is mandatory for this project. Please install CUDA Toolkit manually or use -DAUTO_INSTALL_DEPENDENCIES=ON")
+    endif()
 endif()
 
 # LLVM/Clang JIT compilation support (mandatory)
@@ -34,7 +91,14 @@ message(STATUS "Configuring LLVM/Clang JIT compilation support...")
 find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config-18 llvm-config DOC "llvm-config tool")
 
 if(NOT LLVM_CONFIG_EXECUTABLE)
-    message(FATAL_ERROR "llvm-config not found. LLVM/Clang JIT compilation is mandatory for this project. Please install LLVM/Clang 18.")
+    message(STATUS "llvm-config not found. Attempting to install LLVM/Clang 18...")
+    install_system_packages("llvm-18 llvm-18-dev clang-18 libclang-18-dev")
+    
+    # Retry finding llvm-config after installation
+    find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config-18 llvm-config DOC "llvm-config tool")
+    if(NOT LLVM_CONFIG_EXECUTABLE)
+        message(FATAL_ERROR "llvm-config not found. LLVM/Clang JIT compilation is mandatory for this project. Please install LLVM/Clang 18 manually or use -DAUTO_INSTALL_DEPENDENCIES=ON")
+    endif()
 endif()
 
 execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --version OUTPUT_VARIABLE LLVM_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -74,7 +138,13 @@ endif()
 
 # Verify that the Clang interpreter header exists (mandatory)
 if(NOT EXISTS "${CLANG_INCLUDE_DIR}/clang/Interpreter/Interpreter.h")
-    message(FATAL_ERROR "Clang interpreter headers not found. Please install LLVM/Clang 18 development headers.")
+    message(STATUS "Clang interpreter headers not found. Attempting to install libclang-18-dev...")
+    install_system_packages("libclang-18-dev")
+    
+    # Re-check for headers after installation
+    if(NOT EXISTS "${CLANG_INCLUDE_DIR}/clang/Interpreter/Interpreter.h")
+        message(FATAL_ERROR "Clang interpreter headers not found. Please install LLVM/Clang 18 development headers manually or use -DAUTO_INSTALL_DEPENDENCIES=ON")
+    endif()
 endif()
 
 message(STATUS "LLVM/Clang JIT compilation support is enabled.")

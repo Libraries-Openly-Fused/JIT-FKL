@@ -12,8 +12,23 @@ This document explains how to use the CMake build system to compile and run the 
   - On Ubuntu: `sudo apt install llvm-18-dev clang-18 libclang-18-dev`
   - On other systems: Install LLVM/Clang 18 from [LLVM releases](https://github.com/llvm/llvm-project/releases)
 - **CUDA Toolkit** (mandatory for NVRTC and GPU support)
+  - On Ubuntu: `sudo apt install nvidia-cuda-toolkit nvidia-cuda-dev`
   - Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit)
   - Requires compatible NVIDIA GPU
+
+### Automatic Dependency Installation
+The build system can automatically install missing dependencies:
+
+```bash
+# Enable automatic installation of missing dependencies
+cmake ../JIT-FKL -DCMAKE_BUILD_TYPE=Release -DAUTO_INSTALL_DEPENDENCIES=ON
+```
+
+When `AUTO_INSTALL_DEPENDENCIES=ON` is specified, CMake will:
+- Detect missing dependencies during configuration
+- Automatically install them using the system package manager (apt on Ubuntu/Debian)
+- Retry configuration after installation
+- Create necessary compatibility files (e.g., CUDA version.json for FKL)
 
 ## Build Instructions
 

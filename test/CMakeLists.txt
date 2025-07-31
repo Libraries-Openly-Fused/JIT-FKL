@@ -72,7 +72,8 @@ function(add_generated_test TARGET_NAME TEST_SOURCE EXTENSION)
     # Include directories
     target_include_directories(${TARGET_NAME_EXT} PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR})
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/fkl/include)
     
     # Link FKL library
     target_link_libraries(${TARGET_NAME_EXT} PRIVATE FKL::FKL)
