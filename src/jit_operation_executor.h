@@ -16,6 +16,9 @@
 #define FK_JIT_OPERATION_EXECUTOR_H
 
 #include <fused_kernel/core/execution_model/executors.h>
+#include <src/jit_operation_executor_cache.h>
+
+#include <fused_kernel/core/utils/type_to_string.h>
 
 namespace fk {
     template <enum TF TFEN>
@@ -110,5 +113,5 @@ namespace fk {
         DECLARE_EXECUTOR_PARENT_IMPL
     };
 } // namespace fk
-
+#undef DECLARE_EXECUTOR_PARENT_IMPL
 #endif // FK_JIT_OPERATION_EXECUTOR_H

@@ -19,7 +19,7 @@
 #include <fused_kernel/fused_kernel.h>
 #include <fused_kernel/algorithms/basic_ops/arithmetic.h>
 #include <fused_kernel/core/utils/type_to_string.h>
-#include <fused_kernel/core/execution_model/executors.h>
+#include <src/jit_operation_executor.h>
 
 #include <iostream>
 #include <string>
@@ -27,11 +27,6 @@
 #include <stdexcept>
 #include <sstream>
 #include <cstring> // For memcpy
-
-#if defined(NVRTC_ENABLED)
-   // CUDA headers
-#include <cuda.h>
-#include <nvrtc.h>
 
 // Helper macro for NVRTC error checking
 #define NVRTC_CHECK(result) { \
@@ -133,13 +128,5 @@ int launch() {
 
     return 0;
 }
-#else
-
-int launch() {
-    std::cerr << "NVRTC is not enabled. Skipping JIT compilation test." << std::endl;
-    return 0;
-}
-
-#endif // NVRTC_ENABLED
 
 #endif // FK_TEST_NVRTC
