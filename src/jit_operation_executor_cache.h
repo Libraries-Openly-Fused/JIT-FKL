@@ -15,7 +15,17 @@
 #ifndef FK_JIT_OPERATION_EXECUTOR_CACHE_H
 #define FK_JIT_OPERATION_EXECUTOR_CACHE_H
 
+#include <cuda.h>
+#include <nvrtc.h>
 #include <fused_kernel/core/utils/utils.h>
+
+#include <src/jit_operation_pp.h>
+
+#include <unordered_map>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <cstring>
 
 namespace fk {
     namespace jit_internal {
@@ -221,8 +231,8 @@ namespace fk {
             gpuErrchk(cuCtxDestroy(m_context));
         }
 
-        static JITExecutorSingleton& getInstance() {
-            static JITExecutorSingleton instance;
+        static JITExecutorCache& getInstance() {
+            static JITExecutorCache instance;
             return instance;
         }
 

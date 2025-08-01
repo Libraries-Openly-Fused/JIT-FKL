@@ -15,6 +15,8 @@
 #ifndef FK_JIT_OPERATION_PP
 #define FK_JIT_OPERATION_PP
 
+#include <cstring>
+
 namespace fk {
     // --- Abstract Operation Definition (Hybrid C++ class) ---
     class JIT_Operation_pp {

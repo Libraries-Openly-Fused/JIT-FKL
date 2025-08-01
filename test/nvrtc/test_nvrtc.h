@@ -19,7 +19,7 @@
 #include <fused_kernel/fused_kernel.h>
 #include <fused_kernel/algorithms/basic_ops/arithmetic.h>
 #include <fused_kernel/core/utils/type_to_string.h>
-#include <fused_kernel/core/execution_model/executors.h>
+#include <src/jit_operation_executor.h>
 
 #include <iostream>
 #include <string>
@@ -27,11 +27,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <cstring> // For memcpy
-
-#if defined(NVRTC_ENABLED)
-   // CUDA headers
-#include <cuda.h>
-#include <nvrtc.h>
+#include <cmath>   // For std::abs
 
 // Helper macro for NVRTC error checking
 #define NVRTC_CHECK(result) { \
@@ -42,11 +38,12 @@
 }
 
 int launch() {
-    // --- 1. Mock Header Content ---
+    // --- 1. Include the correct FKL kernel header using NVRTC ---
     const char* main_source_content =
         R"( 
-        #include <fused_kernel/core/execution_model/executors.h>
+        #include <fused_kernel/core/execution_model/executor_details/executor_kernels.h>
         #include <fused_kernel/algorithms/basic_ops/arithmetic.h>
+        #include <fused_kernel/core/execution_model/data_parallel_patterns.h>
     )";
 
     // --- 2. Define the Runtime Pipeline using JIT_Operation_pp ---
@@ -70,10 +67,9 @@ int launch() {
         write_op // Write operation
     );
 
-    // --- 3. Dynamically build the kernel name expression ---
-    std::string name_expression_str = buildNameExpression(pipeline);
-    const char* name_expression = name_expression_str.c_str();
-    std::cout << "Dynamically generated name expression: " << name_expression << std::endl;
+    // --- 3. Use buildNameExpression to build the correct kernel name ---
+    std::string name_expression = buildNameExpression(pipeline);
+    std::cout << "Using kernel name expression: " << name_expression << std::endl;
 
     // --- 4. CUDA Init & NVRTC Setup ---
     gpuErrchk(cuInit(0));
@@ -83,12 +79,14 @@ int launch() {
     gpuErrchk(cuCtxCreate(&context, 0, device));
 
     nvrtcProgram prog;
-    NVRTC_CHECK(nvrtcCreateProgram(&prog, main_source_content, "pipeline.cu", 2, nullptr, nullptr));
+    NVRTC_CHECK(nvrtcCreateProgram(&prog, main_source_content, "pipeline.cu", 0, nullptr, nullptr));
 
     // --- 5. Compile ---
-    NVRTC_CHECK(nvrtcAddNameExpression(prog, name_expression));
-    const char* options[] = { "--std=c++17", "-ID:/include", "-IE:/GitHub/FKL/include", "-DNVRTC_COMPILER" };
-    nvrtcResult compile_result = nvrtcCompileProgram(prog, 4, options);
+    NVRTC_CHECK(nvrtcAddNameExpression(prog, name_expression.c_str()));
+    // Use FKL include path from CMake
+    std::string fkl_include_option = std::string("-I") + FKL_INCLUDE_PATH;
+    const char* options[] = { "--std=c++17", fkl_include_option.c_str(), "-DNVRTC_COMPILER" };
+    nvrtcResult compile_result = nvrtcCompileProgram(prog, 3, options);
     size_t log_size;
     NVRTC_CHECK(nvrtcGetProgramLogSize(prog, &log_size));
     if (log_size > 1) {
@@ -100,7 +98,7 @@ int launch() {
 
     // --- 6. Get PTX, Mangled Name, and Kernel Handle ---
     const char* mangled_name;
-    NVRTC_CHECK(nvrtcGetLoweredName(prog, name_expression, &mangled_name));
+    NVRTC_CHECK(nvrtcGetLoweredName(prog, name_expression.c_str(), &mangled_name));
     std::cout << "Name expression: " << name_expression << std::endl;
     std::cout << "Mangled kernel name: " << mangled_name << std::endl;
     size_t ptx_size;
@@ -114,15 +112,28 @@ int launch() {
 
     // --- 7. Prepare Data and Launch ---
     const int N = 256;
-    std::vector<void*> kernel_args_vec = buildKernelArgumentsFKL(pipeline);//buildKernelArguments(d_data_in, d_data_out, pipeline);
+    
+    // Use buildKernelArgumentsFKL to build kernel arguments from the pipeline
+    std::vector<void*> kernel_args_vec = buildKernelArgumentsFKL(pipeline);
 
-    std::cout << "Launching dynamically constructed kernel..." << std::endl;
-    gpuErrchk(cuLaunchKernel(kernel_func, 1, 1, 1, N, 1, 1, 0, reinterpret_cast<CUstream>(stream.getCUDAStream()), kernel_args_vec.data(), nullptr));
+    std::cout << "Launching launchTransformDPP_Kernel..." << std::endl;
+    gpuErrchk(cuLaunchKernel(kernel_func, (N + 255) / 256, 1, 1, 256, 1, 1, 0, reinterpret_cast<CUstream>(stream.getCUDAStream()), kernel_args_vec.data(), nullptr));
 
     // --- 8. Verify & Cleanup ---
     d_data_out.download(stream);
     stream.sync();
-    std::cout << "Result of op1(factor=2.0) then op2(offset=5.0) on data[3]: " << d_data_out.at(fk::Point(3)) << " (expected 11)" << std::endl;
+    
+    // Verify results: input[3] = 3, mul by 2 = 6, add 5 = 11
+    float expected = 3.0f * 2.0f + 5.0f;  // = 11
+    float actual = d_data_out.at(fk::Point(3));
+    std::cout << "Result of pipeline (mul=2.0, add=5.0) on data[3]: " << actual << " (expected " << expected << ")" << std::endl;
+    
+    if (std::abs(actual - expected) < 0.001f) {
+        std::cout << "SUCCESS: Test passed!" << std::endl;
+    } else {
+        std::cout << "ERROR: Test failed - unexpected result" << std::endl;
+        return 1;
+    }
 
     gpuErrchk(cuModuleUnload(module));
     NVRTC_CHECK(nvrtcDestroyProgram(&prog));
@@ -133,13 +144,5 @@ int launch() {
 
     return 0;
 }
-#else
-
-int launch() {
-    std::cerr << "NVRTC is not enabled. Skipping JIT compilation test." << std::endl;
-    return 0;
-}
-
-#endif // NVRTC_ENABLED
 
 #endif // FK_TEST_NVRTC
