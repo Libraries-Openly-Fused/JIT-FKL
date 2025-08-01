@@ -1,0 +1,10 @@
+{
+  "cuda": {
+    "name": "CUDA SDK",
+    "version": "12.0.140"
+  },
+  "cuda_nvcc": {
+    "name": "CUDA NVCC",
+    "version": "12.0.140"
+  }
+}
