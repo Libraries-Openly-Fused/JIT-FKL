@@ -28,21 +28,31 @@ function(install_system_packages PACKAGES)
         execute_process(
             COMMAND sudo apt update
             RESULT_VARIABLE UPDATE_RESULT
-            OUTPUT_QUIET ERROR_QUIET
+            OUTPUT_VARIABLE UPDATE_OUTPUT
+            ERROR_VARIABLE UPDATE_ERROR
         )
         if(UPDATE_RESULT EQUAL 0)
+            # Split packages string into list and install each
+            string(REPLACE " " ";" PACKAGE_LIST "${PACKAGES}")
             execute_process(
-                COMMAND sudo apt install -y ${PACKAGES}
+                COMMAND sudo apt install -y ${PACKAGE_LIST}
                 RESULT_VARIABLE INSTALL_RESULT
-                OUTPUT_QUIET ERROR_QUIET
+                OUTPUT_VARIABLE INSTALL_OUTPUT
+                ERROR_VARIABLE INSTALL_ERROR
             )
             if(INSTALL_RESULT EQUAL 0)
                 message(STATUS "Successfully installed packages: ${PACKAGES}")
             else()
                 message(WARNING "Failed to install packages: ${PACKAGES}")
+                if(INSTALL_ERROR)
+                    message(STATUS "Installation error output: ${INSTALL_ERROR}")
+                endif()
             endif()
         else()
             message(WARNING "Failed to update package lists")
+            if(UPDATE_ERROR)
+                message(STATUS "Update error output: ${UPDATE_ERROR}")
+            endif()
         endif()
     else()
         message(STATUS "Auto-install is disabled. To enable automatic installation, use:")
@@ -94,7 +104,8 @@ if(NOT LLVM_CONFIG_EXECUTABLE)
     message(STATUS "llvm-config not found. Attempting to install LLVM/Clang 18...")
     install_system_packages("llvm-18 llvm-18-dev clang-18 libclang-18-dev")
     
-    # Retry finding llvm-config after installation
+    # Clear CMake cache for find_program and retry finding llvm-config after installation
+    unset(LLVM_CONFIG_EXECUTABLE CACHE)
     find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config-18 llvm-config DOC "llvm-config tool")
     if(NOT LLVM_CONFIG_EXECUTABLE)
         message(FATAL_ERROR "llvm-config not found. LLVM/Clang JIT compilation is mandatory for this project. Please install LLVM/Clang 18 manually or use -DAUTO_INSTALL_DEPENDENCIES=ON")
