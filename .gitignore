@@ -47,5 +47,9 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 
+# Build output
+bin/
+build/
+
 # Temporary files
 /tmp/
